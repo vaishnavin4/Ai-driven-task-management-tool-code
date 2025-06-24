@@ -1,0 +1,174 @@
+mport datetime
+import json
+import os
+from colorama import init, Fore, Style
+
+init(autoreset=True)
+
+TASK_FILE = "tasks.json"
+
+class Task:
+    def __init__(self, description, due_date=None, priority="medium", completed=False):
+        self.description = description
+        self.due_date = due_date
+        self.priority = priority
+        self.completed = completed
+
+    def to_dict(self):
+        return {
+            "description": self.description,
+            "due_date": self.due_date.strftime('%Y-%m-%d') if self.due_date else None,
+            "priority": self.priority,
+            "completed": self.completed
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        due_date = datetime.datetime.strptime(data['due_date'], '%Y-%m-%d').date() if data['due_date'] else None
+        return cls(data['description'], due_date, data['priority'], data['completed'])
+
+    def __str__(self):
+        status = Fore.GREEN + "Completed" if self.completed else Fore.YELLOW + "Pending"
+        due_info = f" (Due: {self.due_date.strftime('%Y-%m-%d')})" if self.due_date else ""
+        priority_color = {"high": Fore.RED, "medium": Fore.BLUE, "low": Fore.CYAN}
+        return f"- {self.description} [{priority_color.get(self.priority, Fore.WHITE)}Priority: {self.priority}]{due_info} [{status}]"
+
+class TaskManager:
+    def __init__(self):
+        self.tasks = []
+        self.load_tasks()
+
+    def save_tasks(self):
+        with open(TASK_FILE, 'w') as f:
+            json.dump([task.to_dict() for task in self.tasks], f)
+
+    def load_tasks(self):
+        if os.path.exists(TASK_FILE):
+            with open(TASK_FILE, 'r') as f:
+                self.tasks = [Task.from_dict(t) for t in json.load(f)]
+
+    def add_task(self, description, due_date_str=None, priority="medium"):
+        if not description.strip():
+            print("Description cannot be empty.")
+            return
+        due_date = None
+        if due_date_str:
+            try:
+                due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                print("Invalid date format. Please use YYYY-MM-DD.")
+                return
+        if priority not in ["high", "medium", "low"]:
+            priority = "medium"
+        task = Task(description, due_date, priority)
+        self.tasks.append(task)
+        self.save_tasks()
+        print(f"Task '{description}' added.")
+
+    def view_tasks(self):
+        if not self.tasks:
+            print("No tasks to display.")
+            return
+        print("\n--- Your Tasks ---")
+        for i, task in enumerate(self.tasks):
+            print(f"{i+1}. {task}")
+        print("------------------")
+
+    def mark_completed(self, task_index):
+        if 0 <= task_index < len(self.tasks):
+            self.tasks[task_index].completed = True
+            self.save_tasks()
+            print(f"Task '{self.tasks[task_index].description}' marked as completed.")
+        else:
+            print("Invalid task number.")
+
+    def delete_task(self, task_index):
+        if 0 <= task_index < len(self.tasks):
+            removed = self.tasks.pop(task_index)
+            self.save_tasks()
+            print(f"Task '{removed.description}' deleted.")
+        else:
+            print("Invalid task number.")
+
+    def edit_task(self, task_index, new_desc=None, new_due_date=None, new_priority=None):
+        if 0 <= task_index < len(self.tasks):
+            task = self.tasks[task_index]
+            if new_desc:
+                task.description = new_desc
+            if new_due_date:
+                try:
+                    task.due_date = datetime.datetime.strptime(new_due_date, '%Y-%m-%d').date()
+                except ValueError:
+                    print("Invalid date format. Skipping date change.")
+            if new_priority in ["high", "medium", "low"]:
+                task.priority = new_priority
+            self.save_tasks()
+            print(f"Task '{task.description}' updated.")
+        else:
+            print("Invalid task number.")
+
+    def prioritize_tasks_ai(self):
+        print("\n--- Prioritizing tasks (AI-driven simulation) ---")
+        self.tasks.sort(key=lambda t: (
+            {"high": 0, "medium": 1, "low": 2}.get(t.priority, 1),
+            t.due_date if t.due_date else datetime.date.max
+        ))
+        self.view_tasks()
+        print("------------------------------------------")
+
+def main():
+    manager = TaskManager()
+
+    while True:
+        print("\n--- Task Manager Menu ---")
+        print("1. Add Task")
+        print("2. View Tasks")
+        print("3. Mark Task as Completed")
+        print("4. Prioritize Tasks (AI-driven)")
+        print("5. Edit Task")
+        print("6. Delete Task")
+        print("7. Exit")
+
+        choice = input("Enter your choice: ").strip()
+
+        if choice == '1':
+            description = input("Enter task description: ")
+            due_date_str = input("Enter due date (YYYY-MM-DD, optional): ")
+            priority = input("Enter priority (high, medium, low): ").lower()
+            manager.add_task(description, due_date_str, priority)
+        elif choice == '2':
+            manager.view_tasks()
+        elif choice == '3':
+            manager.view_tasks()
+            try:
+                task_num = int(input("Enter task number to mark as completed: "))
+                manager.mark_completed(task_num - 1)
+            except ValueError:
+                print("Please enter a valid number.")
+        elif choice == '4':
+            manager.prioritize_tasks_ai()
+        elif choice == '5':
+            manager.view_tasks()
+            try:
+                index = int(input("Enter task number to edit: ")) - 1
+                new_desc = input("New description (leave blank to skip): ")
+                new_date = input("New due date (YYYY-MM-DD, leave blank to skip): ")
+                new_priority = input("New priority (high/medium/low, leave blank to skip): ").lower()
+                manager.edit_task(index, new_desc or None, new_date or None, new_priority or None)
+            except ValueError:
+                print("Invalid input.")
+        elif choice == '6':
+            manager.view_tasks()
+            try:
+                task_num = int(input("Enter task number to delete: "))
+                manager.delete_task(task_num - 1)
+            except ValueError:
+                print("Invalid input.")
+        elif choice == '7':
+            print("Goodbye!")
+            break
+        else:
+            print("Invalid choice. Please try again.")
+
+if __name__ == "__main__":
+    main()
